@@ -112,6 +112,16 @@ bool initWiFi(){
   return true;
 }
 
+void clearWifiConfig(){
+  Serial.println("Clearning WiFi Config.....");
+  LittleFS.remove(ssidPath);
+  LittleFS.remove(passPath);
+  LittleFS.remove(ipPath);
+  LittleFS.remove(gatewayPath);
+
+  ESP.restart();
+}
+
 void setup() {
   Serial.begin(115200);
   initLittleFS();
@@ -126,6 +136,22 @@ void setup() {
 
   if(initWiFi()){
     Serial.println("HTTP server started");
+
+
+
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+      request->send(LittleFS, "/index.html", "text/html");
+    });
+
+    server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+      request->send(LittleFS, "/style.css","text/css");
+    });
+    server.on("/index.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+      request->send(LittleFS, "/index.js","text/javascript");
+    });
+
+    // server.serveStatic("/", LittleFS, "/");
+
     server.begin();
   }
     else {
