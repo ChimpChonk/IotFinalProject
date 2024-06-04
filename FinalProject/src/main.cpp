@@ -79,10 +79,17 @@ void setup(){
     Serial.begin(115200);
     initLittleFS();
     initSDCard();
-    ssid = readFile(LittleFS, ssidPath);
-    pass = readFile(LittleFS, passPath);
-    ip = readFile(LittleFS, ipPath);
-    gateway = readFile(LittleFS, gatewayPath);
+    // ssid = readFile(LittleFS, ssidPath);
+    // pass = readFile(LittleFS, passPath);
+    // ip = readFile(LittleFS, ipPath);
+    // gateway = readFile(LittleFS, gatewayPath);
+
+    //only for development
+    ssid = "SSID";
+    pass = "PASS";
+    ip = "192.168.1.169";
+    gateway = "192.168.1.1";
+
     Serial.println(ssid);
     Serial.println(ip);
     Serial.println(gateway);
@@ -104,6 +111,28 @@ void setup(){
 
         server.on("/clearconfig", HTTP_GET, [](AsyncWebServerRequest *request){
             clearWifiConfig();
+        });
+
+        server.on("/download", HTTP_GET, [](AsyncWebServerRequest *request){
+          File file = SD.open("/data.csv", FILE_READ);
+          if(file){
+            request->send(SD, "/data.csv", "text/csv");
+            file.close();
+          }
+          else{
+            request->send(404, "text/plain", "File not found");
+          }
+        });
+
+        server.on("/getdata", HTTP_GET, [](AsyncWebServerRequest *request){
+          File file = SD.open("/data.csv", FILE_READ);
+          if (file){
+            String data = file.readString();
+            request->send(200, "application/json", data);
+          }
+          else{
+            request->send(404, "text/plain", "File not found");
+          }
         });
     server.begin();
   }
@@ -178,6 +207,7 @@ void loop(){
     if((millis() - lastTime) > timerDelay){
         temperatureC = readDSTemperatureC();
         lastTime = millis();
+        saveData();
     }
     getTimeStamp();
 
@@ -334,10 +364,18 @@ void initSDCard(){
     Serial.println("Card mount Failed");
     return;
   }
+  File dataFile = SD.open("/data.csv", FILE_WRITE);
+  dataFile.println("Time,Temperature");
+
+  if(!dataFile){
+    Serial.println("Error opening data.CSV file");
+    return;
+  }
+  dataFile.close();
 }
 
 void saveData(){
- File dataFile = SD.open("data.csv", FILE_APPEND);
+  File dataFile = SD.open("/data.csv", FILE_APPEND);
 
  if(!dataFile){
     Serial.println("Error opening data.CSV file");
@@ -348,12 +386,9 @@ void saveData(){
     dataFile.seek(0);
   }
 
-  dataFile.print(dayStamp);
-  dataFile.print(",");
-  dataFile.print(timeStamp);
+  dataFile.print(dayStamp + " " + timeStamp);
   dataFile.print(",");
   dataFile.println(readDSTemperatureC());
-
   dataFile.close();
 }
 //------------------------------------------------------------
