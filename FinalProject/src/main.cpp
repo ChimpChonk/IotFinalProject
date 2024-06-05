@@ -9,9 +9,13 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <NTPClient.h>
+#include <ESPmDNS.h>
+#include <Arduino_Json.h>
 
 //AsyncWebServer port
 AsyncWebServer server(80);
+AsyncWebSocket ws("/ws");
+
 
 //prototypes
 String readDSTemperatureC();
@@ -24,6 +28,10 @@ bool initWiFi();
 void writeFile(fs::FS &fs, const char * path, const char * message);
 String readFile(fs::FS &fs, const char * path);
 void initLittleFS();
+void notifyClients(String csvData);
+void handleWebSocketMessage(void *arg, uint8_t *data, size_t len);
+void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len);
+void initWebSocket();
 
 //Temp here --------------------------------------------------
 //Temp data wire define
@@ -79,16 +87,16 @@ void setup(){
     Serial.begin(115200);
     initLittleFS();
     initSDCard();
-    // ssid = readFile(LittleFS, ssidPath);
-    // pass = readFile(LittleFS, passPath);
-    // ip = readFile(LittleFS, ipPath);
-    // gateway = readFile(LittleFS, gatewayPath);
+    ssid = readFile(LittleFS, ssidPath);
+    pass = readFile(LittleFS, passPath);
+    ip = readFile(LittleFS, ipPath);
+    gateway = readFile(LittleFS, gatewayPath);
 
     //only for development
-    ssid = "SSID";
-    pass = "PASS";
-    ip = "192.168.1.169";
-    gateway = "192.168.1.1";
+    // ssid = "SSID";
+    // pass = "Pass";
+    // ip = "Ip";
+    // gateway = "gateway";
 
     Serial.println(ssid);
     Serial.println(ip);
@@ -97,6 +105,15 @@ void setup(){
 
     if(initWiFi()){
         Serial.println("HTTP server started");
+        if(!MDNS.begin("apeesp")){
+            Serial.println("Error setting up MDNS");
+            while (1)
+            {
+                delay(1000);
+            }
+        }
+        initWebSocket();
+        Serial.println("mDNS responder started");
         timeClient.begin();
         server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
             request->send(LittleFS, "/index.html", "text/html");
@@ -111,28 +128,27 @@ void setup(){
 
         server.on("/clearconfig", HTTP_GET, [](AsyncWebServerRequest *request){
             clearWifiConfig();
+            request->send(200, "text/plain", "Config cleared");
         });
 
         server.on("/download", HTTP_GET, [](AsyncWebServerRequest *request){
-          File file = SD.open("/data.csv", FILE_READ);
-          if(file){
-            request->send(SD, "/data.csv", "text/csv");
-            file.close();
-          }
-          else{
-            request->send(404, "text/plain", "File not found");
-          }
+            request->send(SD, "/data.csv", "text/csv", true);
         });
 
         server.on("/getdata", HTTP_GET, [](AsyncWebServerRequest *request){
           File file = SD.open("/data.csv", FILE_READ);
           if (file){
             String data = file.readString();
-            request->send(200, "application/json", data);
+            request->send(200, "text/csv", data);
           }
           else{
             request->send(404, "text/plain", "File not found");
           }
+        });
+
+        server.on("/delete", HTTP_GET, [](AsyncWebServerRequest *request){
+          SD.remove("/data.csv");
+          request->send(200, "text/plain", "File deleted");
         });
     server.begin();
   }
@@ -210,7 +226,7 @@ void loop(){
         saveData();
     }
     getTimeStamp();
-
+    ws.cleanupClients();
 }
 
 
@@ -385,10 +401,42 @@ void saveData(){
   if (dataFile.available()) {
     dataFile.seek(0);
   }
-
+  String data = dayStamp + " " + timeStamp + "," + readDSTemperatureC();
   dataFile.print(dayStamp + " " + timeStamp);
   dataFile.print(",");
   dataFile.println(readDSTemperatureC());
+  notifyClients(data);
   dataFile.close();
 }
 //------------------------------------------------------------
+
+void notifyClients(String csvData) {
+  ws.textAll(csvData);
+}
+void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
+  AwsFrameInfo *info = (AwsFrameInfo*)arg;
+  if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
+  }
+}
+
+void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
+  switch (type) {
+    case WS_EVT_CONNECT:
+      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+      break;
+    case WS_EVT_DISCONNECT:
+      Serial.printf("WebSocket client #%u disconnected\n", client->id());
+      break;
+    case WS_EVT_DATA:
+      handleWebSocketMessage(arg, data, len);
+      break;
+    case WS_EVT_PONG:
+    case WS_EVT_ERROR:
+      break;
+  }
+}
+
+void initWebSocket() {
+  ws.onEvent(onEvent);
+  server.addHandler(&ws);
+}

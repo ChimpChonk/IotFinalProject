@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="style.css">
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/modules/accessibility.js"></script> 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Temperature Monitor</title>
 </head>
@@ -14,14 +16,14 @@
             <i>☰</i>
         </a>
         <div id="navMenu">
-            <a>Download CSV</a>
-            <a>Clear CSV</a> 
-            <a>Clear wifi config</a>
+            <a id="downloadBtn">Download CSV</a>
+            <a id="clearCsv">Clear CSV</a> 
+            <a id="clearConfig">Clear wifi config</a>
         </div>
     </div>
 
     <div class="wrapper">
-
+        <div id="chart-temperature" class="container"></div>
     </div>
     <script src="index.js"></script>
 </body>
