@@ -1,3 +1,8 @@
+/**
+ * @file main.cpp
+ * @brief Main file for the ESP32 temperature monitoring and web server project.
+ */
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
@@ -16,8 +21,7 @@
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
-
-//prototypes
+//Function Prototypes
 String readDSTemperatureC();
 String processor(const String& var);
 bool getTimeStamp();
@@ -83,6 +87,9 @@ String dayStamp;
 String timeStamp;
 //------------------------------------------------------------
 
+/**
+ * @brief Setup function for initializing the system.
+ */
 void setup(){
     Serial.begin(115200);
     initLittleFS();
@@ -92,16 +99,9 @@ void setup(){
     ip = readFile(LittleFS, ipPath);
     gateway = readFile(LittleFS, gatewayPath);
 
-    //only for development
-    // ssid = "SSID";
-    // pass = "Pass";
-    // ip = "Ip";
-    // gateway = "gateway";
-
     Serial.println(ssid);
     Serial.println(ip);
     Serial.println(gateway);
-
 
     if(initWiFi()){
         Serial.println("HTTP server started");
@@ -153,16 +153,13 @@ void setup(){
     server.begin();
   }
     else {
-        // Connect to Wi-Fi network with SSID and password
         Serial.println("Setting AP (Access Point)");
-        // NULL sets an open Access Point
         WiFi.softAP("Ape-ESP-AP", NULL);
 
         IPAddress IP = WiFi.softAPIP();
         Serial.print("AP IP address: ");
         Serial.println(IP); 
 
-        // Web Server Root URL
         server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
           request->send(LittleFS, "/wifimanager.html", "text/html");
         });
@@ -174,39 +171,30 @@ void setup(){
           for(int i=0;i<params;i++){
             AsyncWebParameter* p = request->getParam(i);
             if(p->isPost()){
-              // HTTP POST ssid value
               if (p->name() == PARAM_INPUT_1) {
                 ssid = p->value().c_str();
                 Serial.print("SSID set to: ");
                 Serial.println(ssid);
-                // Write file to save value
                 writeFile(LittleFS, ssidPath, ssid.c_str());
               }
-              // HTTP POST pass value
               if (p->name() == PARAM_INPUT_2) {
                 pass = p->value().c_str();
                 Serial.print("Password set to: ");
                 Serial.println(pass);
-                // Write file to save value
                 writeFile(LittleFS, passPath, pass.c_str());
               }
-              // HTTP POST ip value
               if (p->name() == PARAM_INPUT_3) {
                 ip = p->value().c_str();
                 Serial.print("IP Address set to: ");
                 Serial.println(ip);
-                // Write file to save value
                 writeFile(LittleFS, ipPath, ip.c_str());
               }
-              // HTTP POST gateway value
               if (p->name() == PARAM_INPUT_4) {
                 gateway = p->value().c_str();
                 Serial.print("Gateway set to: ");
                 Serial.println(gateway);
-                // Write file to save value
                 writeFile(LittleFS, gatewayPath, gateway.c_str());
               }
-              //Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
             }
         }
         request->send(200, "text/plain", "Done. ESP will restart, connect to your router and go to IP address: " + ip);
@@ -218,8 +206,10 @@ void setup(){
 
 }
 
+/**
+ * @brief Main loop function for periodic tasks.
+ */
 void loop(){
-
     if((millis() - lastTime) > timerDelay){
         temperatureC = readDSTemperatureC();
         lastTime = millis();
@@ -229,20 +219,25 @@ void loop(){
     ws.cleanupClients();
 }
 
-
-//init LittleFS-------------------------------------
+/**
+ * @brief Initialize LittleFS.
+ */
 void initLittleFS()
 {
-  
   if(!LittleFS.begin(true))
   {
     Serial.println("Error mounting file");
   }
-  
   Serial.println("Mounting success");
 }
 
-//Reading file from littleFS
+/**
+ * @brief Read a file from LittleFS.
+ * 
+ * @param fs File system instance.
+ * @param path Path to the file.
+ * @return Content of the file as a String.
+ */
 String readFile(fs::FS &fs, const char * path){
   Serial.printf("Reading file: %s\r\n", path);
 
@@ -259,7 +254,13 @@ String readFile(fs::FS &fs, const char * path){
   return fileContent;
 }
 
-//Writing file to littleFS
+/**
+ * @brief Write a file to LittleFS.
+ * 
+ * @param fs File system instance.
+ * @param path Path to the file.
+ * @param message Content to write.
+ */
 void writeFile(fs::FS &fs, const char * path, const char * message){
   Serial.printf("Writing file: %s\r\n", path);
 
@@ -274,10 +275,12 @@ void writeFile(fs::FS &fs, const char * path, const char * message){
     Serial.println("- write failed");
   }
 }
-//--------------------------------------------------
 
-//WiFi init-----------------------------------------------------
-//wifi init
+/**
+ * @brief Initialize WiFi connection.
+ * 
+ * @return True if WiFi is initialized successfully, otherwise false.
+ */
 bool initWiFi(){
   if(ssid == "" || ip == ""){
     Serial.println("Undefined SSID or IP");
@@ -308,6 +311,9 @@ bool initWiFi(){
   return true;
 }
 
+/**
+ * @brief Clear WiFi configuration.
+ */
 void clearWifiConfig(){
   Serial.println("Clearning WiFi Config.....");
   LittleFS.remove(ssidPath);
@@ -317,12 +323,13 @@ void clearWifiConfig(){
 
   ESP.restart();
 }
-//--------------------------------------------------------------
 
-
-//Temp reading -----------------
+/**
+ * @brief Read temperature from DS18B20 sensor in Celsius.
+ * 
+ * @return Temperature value as a String.
+ */
 String readDSTemperatureC() {
-  // Call sensors.requestTemperatures() to issue a global temperature and Requests to all devices on the bus
   sensors.requestTemperatures(); 
   float tempC = sensors.getTempCByIndex(0);
 
@@ -335,46 +342,50 @@ String readDSTemperatureC() {
   }
   return String(tempC);
 }
-//-------------------------------------------
 
-//process -----------------------------------
+/**
+ * @brief Process function for web server response.
+ * 
+ * @param var Variable name to process.
+ * @return Processed value as a String.
+ */
 String processor(const String& var){
-  //Serial.println(var);
   if(var == "TEMPERATUREC"){
     return temperatureC;
   }
   return String();
 }
-//------------------------------------
 
-//DateTime----------------------------------------
+/**
+ * @brief Get current date and time stamp.
+ * 
+ * @return True if timestamp is obtained successfully, otherwise false.
+ */
 bool getTimeStamp() {
-  // Update timeClient and wait for a response
   if (!timeClient.update()) {
     timeClient.forceUpdate();
-    delay(500); // Rest of the function handles time synchronization and parsing
+    delay(500);
   }
 
-  // Tjek igen efter forceUpdate
   if (!timeClient.update()) {
-    return false; // Returner false, hvis tiden stadig ikke er opdateret
+    return false;
   }
 
-  // Uddrag dato og tid
   formattedDate = timeClient.getFormattedDate();
   int splitT = formattedDate.indexOf("T");
   if (splitT == -1) {
-    return false; // Returner false, hvis formateringen er forkert
+    return false;
   }
 
   dayStamp = formattedDate.substring(0, splitT);
   timeStamp = formattedDate.substring(splitT + 1, formattedDate.length() - 1);
 
-  return true; // Gyldig tidspunkt modtaget
+  return true;
 }
-//-------------------------------------------------------
 
-//Save date on sd card-------------------------------------
+/**
+ * @brief Initialize the SD card.
+ */
 void initSDCard(){
   if(!SD.begin()){
     Serial.println("Card mount Failed");
@@ -390,6 +401,9 @@ void initSDCard(){
   dataFile.close();
 }
 
+/**
+ * @brief Save temperature data to the SD card.
+ */
 void saveData(){
   File dataFile = SD.open("/data.csv", FILE_APPEND);
 
@@ -408,17 +422,39 @@ void saveData(){
   notifyClients(data);
   dataFile.close();
 }
-//------------------------------------------------------------
 
+/**
+ * @brief Notify all WebSocket clients with temperature data.
+ * 
+ * @param csvData Temperature data in CSV format.
+ */
 void notifyClients(String csvData) {
   ws.textAll(csvData);
 }
+
+/**
+ * @brief Handle WebSocket message.
+ * 
+ * @param arg Pointer to the WebSocket frame info.
+ * @param data Pointer to the message data.
+ * @param len Length of the message.
+ */
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   AwsFrameInfo *info = (AwsFrameInfo*)arg;
   if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
   }
 }
 
+/**
+ * @brief Handle WebSocket events.
+ * 
+ * @param server Pointer to the WebSocket server.
+ * @param client Pointer to the WebSocket client.
+ * @param type Type of WebSocket event.
+ * @param arg Pointer to additional event data.
+ * @param data Pointer to event data.
+ * @param len Length of the event data.
+ */
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
   switch (type) {
     case WS_EVT_CONNECT:
@@ -436,6 +472,9 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
   }
 }
 
+/**
+ * @brief Initialize WebSocket server.
+ */
 void initWebSocket() {
   ws.onEvent(onEvent);
   server.addHandler(&ws);
